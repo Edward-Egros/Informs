@@ -1,1 +1,57 @@
+# Working with Next Gen Stats Data
+# Install any and all packages first, if necessary
+library(nflreadr)
+library(tidyverse)
+library(ggplot2)
+library(ggrepel)
+library(ggtext)
+library(nflplotR)
 
+#Data dictionary can be found here:
+#https://cran.r-project.org/web/packages/nflreadr/vignettes/dictionary_nextgen_stats.html
+
+#Load NFL team information
+teams <- load_teams()
+
+#Load play-by-play data to get player IDs
+pbp <- load_pbp(2023) |>
+  filter(season_type == "REG") |>
+  filter(!is.na(posteam) & (rush == 1 | pass == 1)) |>
+  select(passer_player_name, id) |>
+  drop_na() |>
+  distinct(passer_player_name, .keep_all = TRUE)
+
+#Load weekly NGS data (dates back to 2016)
+ngs_data_passing <- load_nextgen_stats(seasons = 2023, stat_type = "passing") |>
+  filter(week == 0)
+
+#Match NGS data with team info and player IDs
+ngs_data_passing <- ngs_data_passing |>
+  left_join(teams, b = c("team_abbr" = "team_abbr")) |>
+  left_join(pbp, b = c("player_short_name" = "passer_player_name")) |>
+  filter(attempts>=238)
+
+#Create plot of CPOE for each QB
+ggplot(data = ngs_data_passing,
+       aes(x = reorder(team_abbr, completion_percentage_above_expectation),
+                                    y = completion_percentage_above_expectation)) +
+  geom_col(aes(color = team_abbr, fill = team_abbr), width = 0.5) +
+  geom_nfl_headshots(aes(player_gsis = id), width = 0.075, vjust = 0.45) +
+  scale_color_nfl(type = "secondary") +
+  scale_fill_nfl(alpha = 0.4) +
+  labs(
+    title = "2023 NFL Quarterback Completion Percentage Above Expectation",
+    y = "CPOE"
+  ) +
+  ylim(-4, 5.5) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.title.position = "plot",
+    axis.title.x = element_blank(),
+    axis.text.x = element_nfl_logo(size = 0.8)
+  )
+
+#For additional tutorials: 
+#https://bradcongelio.com/nfl-analytics-with-r-book/
+#https://nflplotr.nflverse.com/articles/nflplotR.html
